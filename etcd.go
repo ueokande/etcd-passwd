@@ -3,15 +3,44 @@ package etcdsshd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/clientv3util"
 )
 
 type EtcdPasswd struct {
 	entries []*Passwd
 	index   int
+}
+
+func AddUser(p *Passwd) error {
+	key := path.Join(etcdPrefix, "users/", strconv.Itoa(int(p.UID)))
+	value, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+
+	client, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{etcdEndpoint},
+		DialTimeout: 2 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Txn(context.Background()).
+		If(clientv3util.KeyMissing(key)).
+		Then(clientv3.OpPut(key, string(value))).
+		Commit()
+
+	if !resp.Succeeded {
+		return errors.New("user already exist")
+	}
+	return nil
 }
 
 const (
@@ -33,7 +62,10 @@ func (e *EtcdPasswd) Setpwent() error {
 		return err
 	}
 
-	resp, err := client.Get(context.Background(), path.Join(etcdPrefix, "users/"))
+	resp, err := client.Get(
+		context.Background(), path.Join(etcdPrefix, "users/"),
+		clientv3.WithPrefix(),
+	)
 	if err != nil {
 		return err
 	}

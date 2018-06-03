@@ -1,5 +1,5 @@
-libnss_etcd.so.2: *.go *.h *.c
-	go build -buildmode=c-shared -o $@
+libnss_etcd.so.2: cmd/libnss_etcd/*.go *.h *.c
+	go build -buildmode=c-shared -o $@ ./cmd/libnss_etcd
 	chmod +x $@
 
 build: libnss_etcd.so.2

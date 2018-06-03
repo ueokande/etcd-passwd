@@ -1,4 +1,4 @@
-package main
+package etcdsshd
 
 // #include <pwd.h>
 // #include <errno.h>

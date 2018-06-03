@@ -1,4 +1,4 @@
-package main
+package etcdsshd
 
 import (
 	"context"
@@ -22,14 +22,6 @@ const (
 func init() {
 	var p EtcdPasswd
 	RegisterPasswd(&p)
-}
-
-type UserClient interface {
-	Add(p *Passwd) error
-}
-
-func NewClient(server string) (UserClient, error) {
-	return nil, nil
 }
 
 func (e *EtcdPasswd) Setpwent() error {

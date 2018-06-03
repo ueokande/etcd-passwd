@@ -13,13 +13,13 @@ type UID uint
 type GID uint
 
 type Passwd struct {
-	name   string
-	passwd string
-	uid    UID
-	gid    GID
-	gecos  string
-	dir    string
-	shell  string
+	Name   string
+	Passwd string
+	UID    UID
+	GID    GID
+	Gecos  string
+	Dir    string
+	Shell  string
 }
 
 type PasswdInterface interface {
@@ -37,32 +37,40 @@ func RegisterPasswd(pwd PasswdInterface) {
 	impl = pwd
 }
 
-func setCPasswd(cpwd *C.struct_passwd, buf []byte, p *Passwd) {
-	b := bytes.NewBuffer(buf)
+func setCPasswd(p *Passwd, passwd *C.struct_passwd, buf *C.char, buflen C.size_t, errnop *C.int) nssStatus {
+	if len(p.Name)+len(p.Passwd)+len(p.Gecos)+len(p.Dir)+len(p.Shell)+5 > int(buflen) {
+		*errnop = C.int(syscall.EAGAIN)
+		return nssStatusTryagain
+	}
+
+	gobuf := C.GoBytes(unsafe.Pointer(buf), C.int(buflen))
+	b := bytes.NewBuffer(gobuf)
 	b.Reset()
 
-	cpwd.pw_name = (*C.char)(unsafe.Pointer(&buf[b.Len()]))
-	b.WriteString(p.name)
+	passwd.pw_name = (*C.char)(unsafe.Pointer(&gobuf[b.Len()]))
+	b.WriteString(p.Name)
 	b.WriteByte(0)
 
-	cpwd.pw_passwd = (*C.char)(unsafe.Pointer(&buf[b.Len()]))
-	b.WriteString(p.passwd)
+	passwd.pw_passwd = (*C.char)(unsafe.Pointer(&gobuf[b.Len()]))
+	b.WriteString(p.Passwd)
 	b.WriteByte(0)
 
-	cpwd.pw_gecos = (*C.char)(unsafe.Pointer(&buf[b.Len()]))
-	b.WriteString(p.gecos)
+	passwd.pw_gecos = (*C.char)(unsafe.Pointer(&gobuf[b.Len()]))
+	b.WriteString(p.Gecos)
 	b.WriteByte(0)
 
-	cpwd.pw_dir = (*C.char)(unsafe.Pointer(&buf[b.Len()]))
-	b.WriteString(p.dir)
+	passwd.pw_dir = (*C.char)(unsafe.Pointer(&gobuf[b.Len()]))
+	b.WriteString(p.Dir)
 	b.WriteByte(0)
 
-	cpwd.pw_shell = (*C.char)(unsafe.Pointer(&buf[b.Len()]))
-	b.WriteString(p.shell)
+	passwd.pw_shell = (*C.char)(unsafe.Pointer(&gobuf[b.Len()]))
+	b.WriteString(p.Shell)
 	b.WriteByte(0)
 
-	cpwd.pw_uid = C.uint(p.uid)
-	cpwd.pw_gid = C.uint(p.gid)
+	passwd.pw_uid = C.uint(p.UID)
+	passwd.pw_gid = C.uint(p.GID)
+
+	return nssStatusSuccess
 }
 
 //export go_setpwent
@@ -92,15 +100,8 @@ func go_getpwent(passwd *C.struct_passwd, buf *C.char, buflen C.size_t, errnop *
 	} else if err != nil {
 		return nssStatusUnavail
 	}
-	if len(p.name)+len(p.passwd)+len(p.gecos)+len(p.dir)+len(p.shell)+5 > int(buflen) {
-		*errnop = C.int(syscall.EAGAIN)
-		return nssStatusTryagain
-	}
 
-	gobuf := C.GoBytes(unsafe.Pointer(buf), C.int(buflen))
-	setCPasswd(passwd, gobuf, p)
-
-	return nssStatusSuccess
+	return setCPasswd(p, passwd, buf, buflen, errnop)
 }
 
 //export go_getpwnam
@@ -111,15 +112,8 @@ func go_getpwnam(name string, passwd *C.struct_passwd, buf *C.char, buflen C.siz
 	} else if err != nil {
 		return nssStatusUnavail
 	}
-	if len(p.name)+len(p.passwd)+len(p.gecos)+len(p.dir)+len(p.shell)+5 > int(buflen) {
-		*errnop = C.int(syscall.EAGAIN)
-		return nssStatusTryagain
-	}
 
-	gobuf := C.GoBytes(unsafe.Pointer(buf), C.int(buflen))
-	setCPasswd(passwd, gobuf, p)
-
-	return nssStatusSuccess
+	return setCPasswd(p, passwd, buf, buflen, errnop)
 }
 
 //export go_getpwuid
@@ -130,13 +124,5 @@ func go_getpwuid(uid UID, passwd *C.struct_passwd, buf *C.char, buflen C.size_t,
 	} else if err != nil {
 		return nssStatusUnavail
 	}
-	if len(p.name)+len(p.passwd)+len(p.gecos)+len(p.dir)+len(p.shell)+5 > int(buflen) {
-		*errnop = C.int(syscall.EAGAIN)
-		return nssStatusTryagain
-	}
-
-	gobuf := C.GoBytes(unsafe.Pointer(buf), C.int(buflen))
-	setCPasswd(passwd, gobuf, p)
-
-	return nssStatusSuccess
+	return setCPasswd(p, passwd, buf, buflen, errnop)
 }
